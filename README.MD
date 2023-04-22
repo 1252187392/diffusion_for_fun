@@ -1,6 +1,12 @@
 # diffusion for fun
 simple code to finetune stable diffusion with lora    
-modify from huggingface diffusion
+modify from huggingface diffusion    
+support windows
+## requirements
+* pytorch
+```buildoutcfg
+pip install -i requirements.txt
+```
 
 ## run
 
@@ -19,7 +25,7 @@ data_dir format
 accelerate launch .\finetune_lora.py
 ```
 
-### step
+### step3
 run app/web_demo with new model
 
 
