@@ -9,20 +9,32 @@ import gradio as gr
 import cv2
 import importlib
 
-from diffusers import DiffusionPipeline
-from models.model_utils import init_models, init_accelerator, set_unet_lora
-from dataloader.dataloader import get_dataloader
+from diffusers import DiffusionPipeline, DDIMScheduler,DDPMScheduler
 from models.train_step import generate_image
-from tqdm import tqdm
+
+from lora_diffusion import (
+    inject_trainable_lora,
+    save_lora_weight,
+    extract_lora_ups_down,
+    monkeypatch_lora,
+    tune_lora_scale,
+)
 
 assert len(sys.argv) > 1, 'must specify conf file'
 conf = sys.argv[1]
 print('using conf:', conf)
 conf = importlib.import_module(f'conf.{conf}')
-
+ddpm = DDPMScheduler.from_pretrained(conf.model_conf['pretrained_model_name_or_path'], subfolder="scheduler")
+#ddim = DDIMScheduler.from_pretrained(conf.model_conf['pretrained_model_name_or_path'], subfolder="scheduler")
+#pndm = PNDMScheduler.from_pretrained(repo_id, subfolder="scheduler")
+#lms = LMSDiscreteScheduler.from_pretrained(repo_id, subfolder="scheduler")
+#euler_anc = EulerAncestralDiscreteScheduler.from_pretrained(repo_id, subfolder="scheduler")
+#euler = EulerDiscreteScheduler.from_pretrained(repo_id, subfolder="scheduler")
+#scheduler = DDIMScheduler.from_pretrained(conf.model_conf['pretrained_model_name_or_path'])
 pipeline = DiffusionPipeline.from_pretrained(
         conf.model_conf['pretrained_model_name_or_path'],
         #unet = accelerator.unwrap_model(unet),
+        scheduler=ddpm,
         revision=conf.model_conf['revision'],
         torch_dtype=torch.float16,
         safety_checker=None
@@ -31,30 +43,18 @@ pipeline = pipeline.to("cuda")
 
 if conf.load_weights:
     pipeline.unet.load_attn_procs(conf.load_weights)
-    #attn_processors = {k: v.to(device=accelerator.device, dtype=torch.float16) for k, v in unet.attn_processors.items()}
-    #pipeline.unet.set_attn_processor(attn_processors)
-    #for k,v in pipeline.unet.attn_processors.items():
-    #    print(k,v)
-    #    break
 
-#sys.exit()
-
+monkeypatch_lora(pipeline.text_encoder, torch.load(os.path.join(conf.load_weights, "lora_text_encoder.pt")),
+                 target_replace_module=["CLIPAttention"])
 
 def text_to_image(prompt, prompt2, negative_prompt, seed, text_lora_scale=1, diffusion_lora_scale=1, steps=25):
     #prompt = f'masterpiece,{prompt}' if 'masterpiece' not in prompt else prompt
     print('used prompt:', prompt)
-    images1 = generate_image(pipeline,prompt,
-                           steps,
-                           seed,
-                           2,
-                           'cuda',
-                           None,negative_prompt,diffusion_lora_scale)
-    images2 = generate_image(pipeline, prompt2,
-                            steps,
-                            seed,
-                            2,
-                            'cuda',
-                            None,negative_prompt,diffusion_lora_scale)
+    tune_lora_scale(pipeline.text_encoder, text_lora_scale)
+    images1 = generate_image(pipeline, prompt, steps, seed, 2, 'cuda',
+                             None, negative_prompt, diffusion_lora_scale)
+    images2 = generate_image(pipeline, prompt2, steps,seed,2,'cuda',
+                             None,negative_prompt,diffusion_lora_scale)
 
     return images1+images2
 
