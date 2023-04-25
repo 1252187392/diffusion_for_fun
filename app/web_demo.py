@@ -12,6 +12,7 @@ import importlib
 from diffusers import DiffusionPipeline, DDIMScheduler,DDPMScheduler,StableDiffusionLatentUpscalePipeline
 from models.train_step import generate_image,generate_SR_image
 
+
 from lora_diffusion import (
     inject_trainable_lora,
     save_lora_weight,
@@ -38,6 +39,9 @@ pipeline = DiffusionPipeline.from_pretrained(
         torch_dtype=torch.float16,
         safety_checker=None
 )
+from xformers.ops import MemoryEfficientAttentionFlashAttentionOp
+pipeline.enable_xformers_memory_efficient_attention(MemoryEfficientAttentionFlashAttentionOp)
+#pipeline.unet.enable_xformers_memory_efficient_attention()
 pipeline = pipeline.to("cuda",torch_dtype=torch.float16)
 
 if conf.load_weights:
@@ -47,6 +51,7 @@ monkeypatch_lora(pipeline.text_encoder, torch.load(os.path.join(conf.load_weight
                  target_replace_module=["CLIPAttention"])
 
 model_id = "stabilityai/sd-x2-latent-upscaler"
+#model_id = "stabilityai/stable-diffusion-x4-upscaler"
 upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(model_id, torch_dtype=torch.float16)
 upscaler.to("cuda")
 
