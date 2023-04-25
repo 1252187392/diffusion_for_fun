@@ -9,8 +9,8 @@ import gradio as gr
 import cv2
 import importlib
 
-from diffusers import DiffusionPipeline, DDIMScheduler,DDPMScheduler
-from models.train_step import generate_image
+from diffusers import DiffusionPipeline, DDIMScheduler,DDPMScheduler,StableDiffusionLatentUpscalePipeline
+from models.train_step import generate_image,generate_SR_image
 
 from lora_diffusion import (
     inject_trainable_lora,
@@ -33,13 +33,12 @@ ddpm = DDPMScheduler.from_pretrained(conf.model_conf['pretrained_model_name_or_p
 #scheduler = DDIMScheduler.from_pretrained(conf.model_conf['pretrained_model_name_or_path'])
 pipeline = DiffusionPipeline.from_pretrained(
         conf.model_conf['pretrained_model_name_or_path'],
-        #unet = accelerator.unwrap_model(unet),
         scheduler=ddpm,
         revision=conf.model_conf['revision'],
         torch_dtype=torch.float16,
         safety_checker=None
 )
-pipeline = pipeline.to("cuda")
+pipeline = pipeline.to("cuda",torch_dtype=torch.float16)
 
 if conf.load_weights:
     pipeline.unet.load_attn_procs(conf.load_weights)
@@ -47,14 +46,21 @@ if conf.load_weights:
 monkeypatch_lora(pipeline.text_encoder, torch.load(os.path.join(conf.load_weights, "lora_text_encoder.pt")),
                  target_replace_module=["CLIPAttention"])
 
-def text_to_image(prompt, prompt2, negative_prompt, seed, text_lora_scale=1, diffusion_lora_scale=1, steps=25):
+model_id = "stabilityai/sd-x2-latent-upscaler"
+upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(model_id, torch_dtype=torch.float16)
+upscaler.to("cuda")
+
+
+def text_to_image(height, width, prompt, prompt2, negative_prompt, seed, text_lora_scale=1, diffusion_lora_scale=1, steps=25):
     #prompt = f'masterpiece,{prompt}' if 'masterpiece' not in prompt else prompt
     print('used prompt:', prompt)
+    steps = int(steps)
     tune_lora_scale(pipeline.text_encoder, text_lora_scale)
-    images1 = generate_image(pipeline, prompt, steps, seed, 2, 'cuda',
-                             None, negative_prompt, diffusion_lora_scale)
-    images2 = generate_image(pipeline, prompt2, steps,seed,2,'cuda',
-                             None,negative_prompt,diffusion_lora_scale)
+    with torch.no_grad():
+        images1 = generate_SR_image(pipeline, prompt, steps, seed, 2, 'cuda',
+                             None, negative_prompt, diffusion_lora_scale, (width,height),upscaler)
+        images2 = generate_SR_image(pipeline, prompt2, steps,seed,2,'cuda',
+                             None,negative_prompt,diffusion_lora_scale, (width,height),upscaler)
 
     return images1+images2
 
@@ -82,18 +88,20 @@ eg5 = """
 neg_eg1 = 'worst quality, low quality, medium quality, deleted, lowres, comic, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, jpeg artifacts, signature, watermark, username, blurry'
 
 neg_eg2 = '(makeup:1.8),(smooth skin:1.3), anime, illustration, 3d, sepia, painting, cartoons, sketch, (worst quality:2), (low quality:2), (normal quality:2), lowres, bad anatomy, bad hands, normal quality, ((monochrome)), ((grayscale:1.2)), futanari, full-package_futanari, penis_from_girl, newhalf, collapsed eyeshadow, multiple eyebrows, vaginas in breasts, pink hair, holes on breasts, fleckles, stretched nipples, gigantic penis, nipples on buttocks, analog, analogphoto, anal sex, signatre, logo, render,'
-examples = [[eg1.strip(), '', neg_eg1, 137, 1, 1, 25],
-            [eg2.strip(), '', neg_eg1, 137, 1, 1,25],
-            [eg3.strip(), '', neg_eg1, 137, 1, 1,25],
-            [eg4.strip(), '', neg_eg1, 137, 1, 1,25],
-            [eg5.strip(), '', neg_eg1, 137, 1, 1,25]
+examples = [[512, 512, eg1.strip(), '', neg_eg1, 137, 1, 1, 25],
+            [512, 512,eg2.strip(), '', neg_eg1, 137, 1, 1, 25],
+            [512, 512,eg3.strip(), '', neg_eg1, 137, 1, 1, 25],
+            [512, 512,eg4.strip(), '', neg_eg1, 137, 1, 1, 25],
+            [512, 512,eg5.strip(), '', neg_eg1, 137, 1, 1, 25]
             ]
 # interface = gr.Interface(fn=to_black, inputs="image", outputs="image")
 # interface.launch(share=True)
 interface = gr.Interface(fn=text_to_image,
-                         inputs=["text", "text", "text", gr.Slider(1, 20000, value=1, label="seed", info="随机种子"),
+                         inputs=[gr.Slider(256, 1024, value=512, step=64, label="height", info="height"),
+                                gr.Slider(256, 1024, value=512, step=64, label="width", info="width"),
+                                    "text", "text", "text", gr.Slider(1, 20000, value=1, label="seed", info="随机种子"),
                                     gr.Slider(0, 1, value=1, label="text_lora_scale", info="text_lora_scale"),
                                     gr.Slider(0, 1, value=1, label="diffusion_lora_scale", info="diffusion_lora_scale"),
-                                    gr.Slider(1, 50, value=1, label="steps", info="steps")],
+                                    gr.Slider(1, 50, value=1, step=1, label="steps", info="steps")],
                          outputs=["image"] * 4, examples=examples)
 interface.launch(share=False)
