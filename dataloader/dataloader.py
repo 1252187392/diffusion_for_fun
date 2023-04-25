@@ -38,21 +38,30 @@ def read_from_path(image_path):
 def random_tags(prompt, r=0.1):
     prompt = prompt.split(',')
     start_ = prompt[:1]
-    descriptions = prompt[1:]
+    descriptions = prompt[1:35]
     random.shuffle(descriptions)
     cut = int(len(descriptions)*r)
-    prompt = ','.join(start_ + descriptions[:-cut])
+    if cut == 0:
+        cut = 1
+    prompt = start_ + descriptions[:-cut]
+    random.shuffle(prompt)
+    prompt = ','.join(prompt)
+
+    #random.shuffle(prompt)
+    #prompt = ','.join(prompt)
     return prompt
 
 def get_prompt_token(prompt, tokenizer, prompt_conf_dict):
     if len(prompt):
         prompt = prompt.strip().replace('_', ' ').replace('-', ' ')
-        if prompt_conf_dict['random_tags'] > 0:
-            prompt = random_tags(prompt, prompt_conf_dict['random_tags'])
+        #if prompt_conf_dict['random_tags'] > 0:
+        prompt = random_tags(prompt, prompt_conf_dict['random_tags'])
         #if len(prompt_conf_dict['add_token']) > 0:
         #    prompt = f'{prompt_conf_dict["add_token"]}, {prompt}'
+        #print(prompt)
         token = tokenizer(prompt, max_length=tokenizer.model_max_length,
                     padding="max_length", truncation=True, return_tensors="pt")
+        #print(token)
     else:
         prompt = random.choice(prompt_conf_dict['prompts_templates']).format(prompt_conf_dict['add_token'])
         token = tokenizer(prompt, max_length=tokenizer.model_max_length,
@@ -98,14 +107,7 @@ class CustomImageDataset(Dataset):
         return len(self.paths)
 
     def __getitem__(self, idx):
-        #while True:
-            #try:
-            #    image, label = read_from_path(self.paths[idx])
-            #    break
-            #except Exception as e:
-            #    print(e)
-            #    print(self.paths[idx])
-            #    self.paths[idx] = random.choice(self.paths)
+
         image, label = read_from_path(self.paths[idx])
         image = transforms.Resize(self.resolution,
                                   interpolation=transforms.InterpolationMode.BILINEAR)(image)
@@ -118,6 +120,55 @@ class CustomImageDataset(Dataset):
         return image, tokens
 
 
+class BucketImageDataset(Dataset):
+    def __init__(self, data_dir, tokenizer, prompt_conf=None):
+        self.paths = get_data_paths(data_dir)
+        self.tokenizer = tokenizer
+        self.resolution = 512
+        self.prompt_conf = prompt_conf
+        self.batch = 3
+        self.buckets = [[512,512], [512,640], [512, 768],[448, 768],[384, 768]]
+        #                   1         1.25       1.5         1.7        2
+        self.ratios = [x[1]/x[0] for x in self.buckets]
+        self.batch_datas = [[] for i in range(len(self.buckets))]
+        self.data_idx = 0
+
+    def select_size(self, r):
+        for i in range(len(self.ratios)-1, -1, -1):
+            if r >= self.ratios[i]:
+                return i, self.buckets[i]
+        return 0,self.buckets[0]
+
+    def prepare_data(self):
+        for i in range(self.data_idx, len(self.paths)):
+            image, label = read_from_path(self.paths[i])
+            _, h,w = image.shape
+            idx, (W, H) = self.select_size(h/w)
+            image = transforms.Resize(W,
+                                      interpolation=transforms.InterpolationMode.BILINEAR)(image)
+            image = transforms.CenterCrop((H, W))(image)  # h,w
+            image = transforms.Normalize([0.5], [0.5])(image.float() / 255)
+
+            tokens = get_prompt_token(label, self.tokenizer, self.prompt_conf)
+            tokens, mask = tokens.input_ids[0], tokens.attention_mask[0]
+            self.batch_datas[idx].append([image, tokens])
+            if len(self.batch_datas[idx]) == self.batch:
+                self.data_idx = (i + 1)% len(self.paths)
+                return idx
+
+    def __len__(self):
+        return len(self.paths)//self.batch
+
+    def __getitem__(self, idx):
+        batch_idx = self.prepare_data()
+        datas = self.batch_datas[batch_idx]
+        self.batch_datas[batch_idx] = []
+        images = [d[0] for d in datas]
+        tokens = [d[1] for d in datas]
+        images = torch.stack(images,dim=0)
+        tokens = torch.stack(tokens,dim=0)
+        return images, tokens
+
 def get_dataloader(data_dir, tokenizer, prompt_conf_dict,batch_size=2):
     ds = CustomImageDataset(data_dir, tokenizer, prompt_conf_dict)
     train_dataloader = torch.utils.data.DataLoader(
@@ -126,5 +177,16 @@ def get_dataloader(data_dir, tokenizer, prompt_conf_dict,batch_size=2):
         #collate_fn=collate_fn,
         batch_size=batch_size,
         #num_workers=args.dataloader_num_workers,
+    )
+    return train_dataloader
+
+def get_bucket_dataloader(data_dir, tokenizer, prompt_conf_dict,batch_size=2):
+    ds = BucketImageDataset(data_dir, tokenizer, prompt_conf_dict)
+    train_dataloader = torch.utils.data.DataLoader(
+        ds,
+        shuffle=True,
+        #collate_fn=collate_fn,
+        #num_workers=args.dataloader_num_workers,
+        batch_size=None
     )
     return train_dataloader
