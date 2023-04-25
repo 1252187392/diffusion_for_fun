@@ -13,6 +13,14 @@ from models.model_utils import init_models, init_accelerator, set_unet_lora
 from dataloader.dataloader import get_dataloader
 from models.train_step import train_step,generate_image
 from tqdm import tqdm
+import itertools
+from lora_diffusion import (
+    inject_trainable_lora,
+    save_lora_weight,
+    extract_lora_ups_down,
+    monkeypatch_lora,
+    tune_lora_scale,
+)
 
 accelerator = init_accelerator(conf.accelerator_conf)
 
@@ -40,13 +48,31 @@ if conf.load_weights:
 else:
     set_unet_lora(unet)
 
+# set text encoder
+text_encoder_lora_params, text_encoder_names = inject_trainable_lora(
+            text_encoder, target_replace_module=["CLIPAttention"],
+            r=4,
+)
+
 lora_layers = AttnProcsLayers(unet.attn_processors)
-for x in lora_layers.parameters():
-    print(x.dtype)
-    break
+
+params_to_optimize = (
+    [
+        {
+            "params": lora_layers.parameters(),
+            "lr": 5e-5
+        },
+        {
+            "params": itertools.chain(*text_encoder_lora_params),
+            "lr": 5e-5,
+        },
+    ]
+)
+
 #sys.exit()
 optimizer = torch.optim.AdamW(
-    lora_layers.parameters(),
+    #lora_layers.parameters(),
+    params_to_optimize,
     lr=conf.optimizer_conf['learning_rate'],
     betas=(conf.optimizer_conf['adam_beta1'], conf.optimizer_conf['adam_beta2']),
     weight_decay=conf.optimizer_conf['adam_weight_decay'],
@@ -57,25 +83,30 @@ optimizer = torch.optim.AdamW(
 data_loader = get_dataloader(conf.data_dirs, tokenizer, conf.prompt_conf_dict, conf.batch_size)
 
 # Prepare everything with our `accelerator`.
-lora_layers, optimizer, data_loader = accelerator.prepare(
-    lora_layers, optimizer, data_loader
+lora_layers, text_encoder, optimizer, data_loader = accelerator.prepare(
+    lora_layers, text_encoder, optimizer, data_loader
 )
 
 num_update_steps_per_epoch = math.ceil(len(data_loader) / conf.accelerator_conf['gradient_accumulation_steps'])
 
 total_batch_size = conf.batch_size * accelerator.num_processes * conf.accelerator_conf['gradient_accumulation_steps']
 print(f'total_batch_size:{total_batch_size}')
+
+
 pipeline = DiffusionPipeline.from_pretrained(
         conf.model_conf['pretrained_model_name_or_path'],
-        unet = accelerator.unwrap_model(unet),
+        text_encoder = accelerator.unwrap_model(text_encoder),
+        unet=accelerator.unwrap_model(unet),
+        scheduler=noise_scheduler,
         revision=conf.model_conf['revision'],
         torch_dtype=weight_dtype,
         safety_checker=None
     )
 #pipeline.safety_checker = lambda images, clip_input: (images, False)
+#pipeline.text_encoder = text_encoder
 pipeline = pipeline.to(accelerator.device)
 
-for epoch in range(conf.epochs):
+for epoch in range(conf.start_epoch+1, conf.epochs):
     unet.train()
     train_loss = 0
     for step, batch_data in tqdm(enumerate(data_loader)):
@@ -93,11 +124,18 @@ for epoch in range(conf.epochs):
                 accelerator.clip_grad_norm_(params_to_clip, conf.optimizer_conf['max_grad_norm'])
             optimizer.step()
             optimizer.zero_grad()
-        if step and step % 20 ==0:
+        if accelerator.is_main_process and step and step % 30 ==0:
             print(f'epoch:{epoch}, step:{step}, loss:{train_loss/step}')
     if epoch % conf.callback_frequency == 0:
         accelerator.wait_for_everyone()
         unet.save_attn_procs(f"{conf.save_weights}/{epoch}")
+
+        save_lora_weight(
+            text_encoder,
+            os.path.join(f"{conf.save_weights}/{epoch}", "lora_text_encoder.pt"),
+            target_replace_module=["CLIPAttention"],
+        )
+
         generate_image(pipeline, conf.generation_conf["prompt"], conf.generation_conf["steps"],
                        conf.generation_conf["seed"],
                        conf.generation_conf["nums"],

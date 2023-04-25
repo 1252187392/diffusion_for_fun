@@ -29,18 +29,42 @@ def train_step(datas, vae, text_encoder, unet, noise_scheduler, weight_dtype):
         raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
     # Predict the noise residual and compute loss
+    #print(encoder_hidden_states.dtype)
+    encoder_hidden_states = encoder_hidden_states.to(torch.float16)
     model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
     loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
     return loss
 
-def generate_image(pipeline, prompt, steps, seed, nums, device, save_name=None, negative_prompt=None, scale=1):
+def generate_image(pipeline, prompt, steps, seed, nums, device, save_name=None,
+                   negative_prompt=None, scale=1, size=(512,512)):
     generator = torch.Generator(device=device).manual_seed(seed)
     images = []
     for _ in range(nums):
         image = pipeline(prompt, negative_prompt=negative_prompt, num_inference_steps=steps,
-                         generator=generator,cross_attention_kwargs={"scale": scale}).images[0]
+                         generator=generator,cross_attention_kwargs={"scale": scale},
+                         height=size[1], width=size[0]).images[0]
         if save_name is not None:
             image.save(f'{save_name}_{_}.jpg')
         images.append(image)
+    return images
+
+
+
+def generate_SR_image(pipeline, prompt, steps, seed, nums, device, save_name=None,
+                   negative_prompt=None, scale=1, size=(512,512), upscaler=None):
+    generator = torch.Generator(device=device).manual_seed(seed)
+    images = []
+    for _ in range(nums):
+        low_res_latents = pipeline(prompt, negative_prompt=negative_prompt, num_inference_steps=steps,
+                         generator=generator,cross_attention_kwargs={"scale": scale},
+                         height=size[1], width=size[0], output_type="latent").images
+        upscaled_image = upscaler(
+            prompt=prompt,
+            image=low_res_latents,
+            num_inference_steps=20,
+            guidance_scale=0,
+            generator=generator,
+        ).images[0]
+        images.append(upscaled_image)
     return images
