@@ -8,3 +8,4 @@ Jinja2
 xformers==0.0.18
 gradio
 matplotlib
+diffusers
