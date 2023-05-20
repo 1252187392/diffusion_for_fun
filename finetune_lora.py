@@ -1,6 +1,6 @@
 import os
 import sys
-#os.environ['TORCH_DISTRIBUTED_BACKEND'] = 'gloo' # for windows， else comment this
+
 import math
 import torch
 torch.distributed.init_process_group("gloo")
@@ -8,7 +8,7 @@ import torch.utils.checkpoint
 
 from diffusers import DiffusionPipeline
 from diffusers.loaders import AttnProcsLayers
-from conf import person as conf
+from conf import person2 as conf
 from models.model_utils import init_models, init_accelerator, set_unet_lora
 from dataloader.dataloader import get_dataloader
 from models.train_step import train_step,generate_image
@@ -41,26 +41,35 @@ unet.to(accelerator.device, dtype=weight_dtype)
 vae.to(accelerator.device, dtype=weight_dtype)
 text_encoder.to(accelerator.device, dtype=weight_dtype)
 
+# lora 注入放在后面，因为训练权重需要FP32
+text_loras = None
 if conf.load_weights:
     unet.load_attn_procs(conf.load_weights)
     attn_processors = {k: v.to(device=accelerator.device, dtype=torch.float32) for k, v in unet.attn_processors.items()}
     unet.set_attn_processor(attn_processors)
+    # text encoder file
+    text_loras = conf.load_weights + '/lora_text_encoder.pt'
+    if not os.path.exists(text_loras):
+        text_loras = None
+    print(f'load_weights:{conf.load_weights}, text_encoder:f{text_loras}')
 else:
-    set_unet_lora(unet)
-
+    set_unet_lora(unet,r=4)
+unet.enable_xformers_memory_efficient_attention()
 # set text encoder
 text_encoder_lora_params, text_encoder_names = inject_trainable_lora(
             text_encoder, target_replace_module=["CLIPAttention"],
+            loras=text_loras, #pt file
             r=4,
 )
 
+#unet lora
 lora_layers = AttnProcsLayers(unet.attn_processors)
 
 params_to_optimize = (
     [
         {
             "params": lora_layers.parameters(),
-            "lr": 5e-5
+            "lr": 1e-4
         },
         {
             "params": itertools.chain(*text_encoder_lora_params),
@@ -79,6 +88,20 @@ optimizer = torch.optim.AdamW(
     eps=conf.optimizer_conf['adam_epsilon'],
 )
 
+pipeline = DiffusionPipeline.from_pretrained(
+        conf.model_conf['pretrained_model_name_or_path'],
+        text_encoder = accelerator.unwrap_model(text_encoder),
+        unet=accelerator.unwrap_model(unet),
+        scheduler=noise_scheduler,
+        revision=conf.model_conf['revision'],
+        torch_dtype=weight_dtype,
+        safety_checker=None,
+        mirror='tuna'
+    )
+#pipeline.safety_checker = lambda images, clip_input: (images, False)
+#pipeline.text_encoder = text_encoder
+pipeline = pipeline.to(accelerator.device)
+
 
 data_loader = get_dataloader(conf.data_dirs, tokenizer, conf.prompt_conf_dict, conf.batch_size)
 
@@ -93,18 +116,6 @@ total_batch_size = conf.batch_size * accelerator.num_processes * conf.accelerato
 print(f'total_batch_size:{total_batch_size}')
 
 
-pipeline = DiffusionPipeline.from_pretrained(
-        conf.model_conf['pretrained_model_name_or_path'],
-        text_encoder = accelerator.unwrap_model(text_encoder),
-        unet=accelerator.unwrap_model(unet),
-        scheduler=noise_scheduler,
-        revision=conf.model_conf['revision'],
-        torch_dtype=weight_dtype,
-        safety_checker=None
-    )
-#pipeline.safety_checker = lambda images, clip_input: (images, False)
-#pipeline.text_encoder = text_encoder
-pipeline = pipeline.to(accelerator.device)
 
 for epoch in range(conf.start_epoch+1, conf.epochs):
     unet.train()
