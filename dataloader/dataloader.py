@@ -23,12 +23,8 @@ def check_prompt(prompt, prompt_conf_dict):
             return False
     return True
 
-def read_from_path(image_path):
+def read_from_path(image_path,label_file):
     im = read_image(image_path)
-    #if im.shape[0] == 4:
-    #    im = im[:3,...]
-    label_file = image_path.split('.')
-    label_file = '.'.join(label_file[:-1])+'_format.txt'
     if os.path.exists(label_file):
         prompt = open(label_file, encoding='utf8').readlines()[0]
     else:
@@ -88,13 +84,17 @@ def get_data_paths(data_dirs):
         paths = paths * data_dir["repeat"]
         print(f"dir:{data_dir['dir']},train_nums:{len(paths)}")
         all_paths += paths
-    for i in range(len(all_paths)-1,-1,-1):
+    pair_paths = []
+    for i in range(len(all_paths)):
         label_file = all_paths[i].split('.')
         label_file = '.'.join(label_file[:-1]) + '_format.txt'
         if not os.path.exists(label_file):
-            all_paths.pop(i)
-    random.shuffle(all_paths)
-    return all_paths
+            label_file = label_file.replace('_format.txt', '.txt')
+            if not os.path.exists(label_file):
+                continue
+        pair_paths.append((all_paths[i], label_file))
+    random.shuffle(pair_paths)
+    return pair_paths
 
 class CustomImageDataset(Dataset):
     def __init__(self,  data_dir, tokenizer, prompt_conf=None):
@@ -107,8 +107,7 @@ class CustomImageDataset(Dataset):
         return len(self.paths)
 
     def __getitem__(self, idx):
-
-        image, label = read_from_path(self.paths[idx])
+        image, label = read_from_path(self.paths[idx][0], self.paths[idx][1])
         image = transforms.Resize(self.resolution,
                                   interpolation=transforms.InterpolationMode.BILINEAR)(image)
         image = transforms.CenterCrop((512, 512))(image) # h,w
@@ -141,7 +140,10 @@ class BucketImageDataset(Dataset):
 
     def prepare_data(self):
         for i in range(self.data_idx, len(self.paths)):
-            image, label = read_from_path(self.paths[i])
+            try:
+                image, label = read_from_path(self.paths[i][0], self.paths[i][1])
+            except:
+                continue
             _, h,w = image.shape
             idx, (W, H) = self.select_size(h/w)
             image = transforms.Resize(W,
