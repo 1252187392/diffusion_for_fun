@@ -7,7 +7,7 @@ load_weights = None # dir of load weights
 save_weights = "weights/exp/"  #
 callback_frequency = 1        # generate image when finetuning
 data_dirs = [
-    {"dir": "./datasets", "repeat": 1, "max": 3000},
+    {"dir": "./faces", "repeat": 1, "max": 3000},
 ]
 
 
@@ -16,7 +16,7 @@ generation_conf = {
     "steps": 25,
     "seed": 137,
     "nums": 3,
-    "save_dir": "outputs/exp/"
+    "save_dir": "outputs/"
 }
 
 accelerator_conf = {
@@ -45,7 +45,8 @@ optimizer_conf = {
 prompt_conf_dict = {
     'filter_tokens':[],
     'must_tokens': [],
-    'prompts_templates': ['a photo of fuliji face'],
+    'prompts_templates': ['a photo of <s1> face'],
     #'add_token': "fulijii face",
-    'random_tags': 0.
+    'random_tags': 0.,
+    'use_default': True
 }

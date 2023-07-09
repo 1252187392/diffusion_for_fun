@@ -1,5 +1,6 @@
 #encoding:utf-8
 import torch
+from torch._C import _unset_default_mobile_cpu_allocator
 from torch.utils.data import Dataset
 import os
 import pandas as pd
@@ -23,12 +24,12 @@ def check_prompt(prompt, prompt_conf_dict):
             return False
     return True
 
-def read_from_path(image_path,label_file):
+def read_from_path(image_path, label_file, default_value=''):
     im = read_image(image_path)
-    if os.path.exists(label_file):
+    if label_file is not None and os.path.exists(label_file):
         prompt = open(label_file, encoding='utf8').readlines()[0]
     else:
-        prompt = ''
+        prompt = default_value
     return im, prompt
 
 def random_tags(prompt, r=0.1):
@@ -74,7 +75,7 @@ def get_paths(data_dir):
             paths.append(path)
     return paths
 
-def get_data_paths(data_dirs):
+def get_data_paths(data_dirs, use_default=False):
     all_paths = []
     for data_dir in data_dirs:
         paths = get_paths(data_dir['dir'])
@@ -88,6 +89,9 @@ def get_data_paths(data_dirs):
     for i in range(len(all_paths)):
         label_file = all_paths[i].split('.')
         label_file = '.'.join(label_file[:-1]) + '_format.txt'
+        if use_default:
+          pair_paths.append((all_paths[i], None))
+          continue
         if not os.path.exists(label_file):
             label_file = label_file.replace('_format.txt', '.txt')
             if not os.path.exists(label_file):
@@ -98,7 +102,7 @@ def get_data_paths(data_dirs):
 
 class CustomImageDataset(Dataset):
     def __init__(self,  data_dir, tokenizer, prompt_conf=None):
-        self.paths = get_data_paths(data_dir)
+        self.paths = get_data_paths(data_dir, prompt_conf['use_default'])
         self.tokenizer = tokenizer
         self.resolution = 512
         self.prompt_conf = prompt_conf
@@ -107,7 +111,7 @@ class CustomImageDataset(Dataset):
         return len(self.paths)
 
     def __getitem__(self, idx):
-        image, label = read_from_path(self.paths[idx][0], self.paths[idx][1])
+        image, label = read_from_path(self.paths[idx][0], self.paths[idx][1], random.choice(self.prompt_conf['prompts_templates']))
         image = transforms.Resize(self.resolution,
                                   interpolation=transforms.InterpolationMode.BILINEAR)(image)
         image = transforms.CenterCrop((512, 512))(image) # h,w
@@ -121,7 +125,7 @@ class CustomImageDataset(Dataset):
 
 class BucketImageDataset(Dataset):
     def __init__(self, data_dir, tokenizer, prompt_conf=None):
-        self.paths = get_data_paths(data_dir)
+        self.paths = get_data_paths(data_dir, prompt_conf['use_default'])
         self.tokenizer = tokenizer
         self.resolution = 512
         self.prompt_conf = prompt_conf
@@ -141,7 +145,7 @@ class BucketImageDataset(Dataset):
     def prepare_data(self):
         for i in range(self.data_idx, len(self.paths)):
             try:
-                image, label = read_from_path(self.paths[i][0], self.paths[i][1])
+                image, label = read_from_path(self.paths[i][0], self.paths[i][1], random.choice(self.prompt_conf['prompts_templates']))
             except:
                 continue
             _, h,w = image.shape
