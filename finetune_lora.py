@@ -53,7 +53,7 @@ if conf.load_weights:
         text_loras = None
     print(f'load_weights:{conf.load_weights}, text_encoder:f{text_loras}')
 else:
-    set_unet_lora(unet,r=4)
+    set_unet_lora(unet, r=4)
 unet.enable_xformers_memory_efficient_attention()
 # set text encoder
 text_encoder_lora_params, text_encoder_names = inject_trainable_lora(

@@ -9,3 +9,4 @@ xformers==0.0.18
 gradio
 matplotlib
 diffusers
+lora-diffusion==0.1.0

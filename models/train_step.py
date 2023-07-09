@@ -36,19 +36,35 @@ def train_step(datas, vae, text_encoder, unet, noise_scheduler, weight_dtype):
 
     return loss
 
+
 def generate_image(pipeline, prompt, steps, seed, nums, device, save_name=None,
-                   negative_prompt=None, scale=1, size=(512,512)):
+                   negative_prompt=None, scale=1, size=(512, 512), strength=0.7, guidance_scale=7.5, init_image=None):
     generator = torch.Generator(device=device).manual_seed(seed)
     images = []
     for _ in range(nums):
         image = pipeline(prompt, negative_prompt=negative_prompt, num_inference_steps=steps,
-                         generator=generator,cross_attention_kwargs={"scale": scale},
+                         generator=generator, cross_attention_kwargs={"scale": scale},
+                         guidance_scale=guidance_scale,
                          height=size[1], width=size[0]).images[0]
         if save_name is not None:
             image.save(f'{save_name}_{_}.jpg')
         images.append(image)
     return images
 
+
+def image_to_image(pipeline, prompt, steps, seed, nums, device, save_name=None,
+                   negative_prompt=None, scale=1, size=(512, 512), strength=0.7, guidance_scale=7.5, init_image=None):
+    generator = torch.Generator(device=device).manual_seed(seed)
+    images = []
+    for _ in range(nums):
+        image = pipeline(prompt, negative_prompt=negative_prompt, num_inference_steps=steps,
+                         generator=generator, cross_attention_kwargs={"scale": scale},
+                         strength=strength, guidance_scale=guidance_scale,
+                         image=init_image).images[0]
+        if save_name is not None:
+            image.save(f'{save_name}_{_}.jpg')
+        images.append(image)
+    return images
 
 
 def generate_SR_image(pipeline, prompt, steps, seed, nums, device, save_name=None,
@@ -58,12 +74,13 @@ def generate_SR_image(pipeline, prompt, steps, seed, nums, device, save_name=Non
     for _ in range(nums):
         low_res_latents = pipeline(prompt, negative_prompt=negative_prompt, num_inference_steps=steps,
                          generator=generator,cross_attention_kwargs={"scale": scale},
-                         height=size[1], width=size[0], output_type="latent").images
+                         height=size[1], width=size[0],output_type="latent"
+                                ).images
         upscaled_image = upscaler(
             prompt=prompt,
             image=low_res_latents,
             num_inference_steps=20,
-            guidance_scale=0,
+            guidance_scale=7.5,
             generator=generator,
         ).images[0]
         images.append(upscaled_image)
