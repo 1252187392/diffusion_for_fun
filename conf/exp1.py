@@ -4,6 +4,7 @@ epochs = 10  # total epochs
 start_epoch = 0  # start epoch , little than epochs
 batch_size = 8  # batch_size
 load_weights = None # dir of load weights
+load_weights_web = "weights/exp/9"
 save_weights = "weights/exp/"  #
 callback_frequency = 1        # generate image when finetuning
 data_dirs = [

@@ -6,7 +6,7 @@ import os
 import torch
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import gradio as gr
 import importlib
 from PIL import Image
@@ -54,9 +54,9 @@ img2img_pipe = img2img_pipe.to("cuda")
 
 
 def load_weights(pipeline):
-    if conf.load_weights:
-        pipeline.unet.load_attn_procs(conf.load_weights)
-        monkeypatch_lora(pipeline.text_encoder, torch.load(os.path.join(conf.load_weights, "lora_text_encoder.pt")),
+    if conf.load_weights_web:
+        pipeline.unet.load_attn_procs(conf.load_weights_web)
+        monkeypatch_lora(pipeline.text_encoder, torch.load(os.path.join(conf.load_weights_web, "lora_text_encoder.pt")),
                          target_replace_module=["CLIPAttention"])
 load_weights(base_pipeline)
 load_weights(img2img_pipe)
