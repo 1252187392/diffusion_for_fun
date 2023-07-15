@@ -1,8 +1,12 @@
+<<<<<<< Updated upstream
 opencv-python-headless
 transformers
 accelerate>=0.16.0
+=======
+accelerate==0.18.0
+>>>>>>> Stashed changes
 torchvision
-transformers>=4.25.1
+transformers==4.28.1
 datasets
 ftfy
 tensorboard
@@ -10,7 +14,12 @@ Jinja2
 xformers==0.0.18
 gradio
 matplotlib
+<<<<<<< Updated upstream
 diffusers
 tqdm
 pillow==10.0.0
 #git+https://github.com/cloneofsimo/lora.git
+=======
+diffusers==0.15.1
+git+https://github.com/cloneofsimo/lora.git@9d6e0b4b5dc40f1d23b1c2260dcd5738309a2844
+>>>>>>> Stashed changes

@@ -3,12 +3,12 @@ import sys
 
 import math
 import torch
-torch.distributed.init_process_group("gloo")
+#torch.distributed.init_process_group("gloo")
 import torch.utils.checkpoint
 
 from diffusers import DiffusionPipeline
 from diffusers.loaders import AttnProcsLayers
-from conf import person2 as conf
+from conf import exp1 as conf
 from models.model_utils import init_models, init_accelerator, set_unet_lora
 from dataloader.dataloader import get_dataloader
 from models.train_step import train_step,generate_image

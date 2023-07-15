@@ -1,18 +1,18 @@
 
 logging_dir = 'logs'
-epochs = 40  # total epochs
-start_epoch = 29  # start epoch , little than epochs
+epochs = 10  # total epochs
+start_epoch = 0  # start epoch , little than epochs
 batch_size = 8  # batch_size
 load_weights = None # dir of load weights
 save_weights = "weights/exp/"  #
 callback_frequency = 1        # generate image when finetuning
 data_dirs = [
-    {"dir": "./faces", "repeat": 1, "max": 3000},
+    {"dir": "./faces", "repeat": 10, "max": 3000},
 ]
 
 
 generation_conf = {
-    "prompt": "SJS face, araffed asian woman with a very big breast posing for a picture, perfect android girl, photo 8 k, artificial intelligence princess, « attractive, smooth waxy skin, lovely delicate face, very wet, glass skin, resting on chest, sichuan, fine bubbles, cutie, exhibant, suki",
+    "prompt": "a photo of <SKS> face",
     "steps": 25,
     "seed": 137,
     "nums": 3,
