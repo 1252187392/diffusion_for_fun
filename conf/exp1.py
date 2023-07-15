@@ -13,7 +13,7 @@ data_dirs = [
 
 
 generation_conf = {
-    "prompt": "a photo of <SKS> face",
+    "prompt": "a photo of <s1> face",
     "steps": 25,
     "seed": 137,
     "nums": 3,
