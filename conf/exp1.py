@@ -8,12 +8,11 @@ load_weights_web = "weights/exp/9"
 save_weights = "weights/exp/"  #
 callback_frequency = 1        # generate image when finetuning
 data_dirs = [
-    {"dir": "./faces", "repeat": 10, "max": 3000},
+    {"dir": "./faces", "repeat": 100, "max": 3000},
 ]
 
-
 generation_conf = {
-    "prompt": "a photo of <s1> face",
+    "prompt": "a photo of <sks1>",
     "steps": 25,
     "seed": 137,
     "nums": 3,
@@ -42,11 +41,21 @@ optimizer_conf = {
     "adam_epsilon": 1e-8
 }
 
-
 prompt_conf_dict = {
     'filter_tokens':[],
     'must_tokens': [],
-    'prompts_templates': ['a photo of <s1> face'],
+    'prompts_templates': ['a photo of <sks1>',
+      "a photo of a <sks1>",
+      "a rendering of a <sks1>",
+      "a cropped photo of the <sks1>",
+      "the photo of a <sks1>",
+      "a photo of a clean <sks1>",
+      "a close-up photo of a <sks1>",
+      "a cropped photo of a <sks1>",
+      "a photo of the <sks1>",
+      "a good photo of the <sks1>",
+      "a close-up photo of the <sks1>",
+    ],
     #'add_token': "fulijii face",
     'random_tags': 0.,
     'use_default': True

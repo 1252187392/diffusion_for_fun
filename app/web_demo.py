@@ -110,4 +110,4 @@ interface = gr.Interface(fn=text_to_image,
                              gr.Slider(1, 50, value=1, step=1, label="steps", info="steps")],
                          outputs=["image"] * 4, examples=init_examples())
 
-interface.launch(share=False)
+interface.launch(share=True)
