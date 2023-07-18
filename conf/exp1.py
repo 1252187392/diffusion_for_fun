@@ -2,10 +2,10 @@
 logging_dir = 'logs'
 epochs = 10  # total epochs
 start_epoch = 0  # start epoch , little than epochs
-batch_size = 8  # batch_size
+batch_size = 6  # batch_size
 load_weights = None # dir of load weights
 load_weights_web = "weights/exp/9"
-save_weights = "weights/exp/"  #
+save_weights = "/content/drive/MyDrive/faces/"  #
 callback_frequency = 1        # generate image when finetuning
 data_dirs = [
     {"dir": "./faces", "repeat": 100, "max": 3000},

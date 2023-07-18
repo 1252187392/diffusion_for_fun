@@ -2,7 +2,7 @@
 logging_dir = 'logs'
 epochs = 10  # total epochs
 start_epoch = 0  # start epoch , little than epochs
-batch_size = 8  # batch_size
+batch_size = 6  # batch_size
 load_weights = None # dir of load weights
 load_weights_web = "weights/exp/9"
 save_weights = "/content/drive/MyDrive/doupo/"  #
@@ -12,7 +12,7 @@ data_dirs = [
 ]
 
 generation_conf = {
-    "prompt": "a painting in the style of  <sks2>",
+    "prompt": "a painting in the style of  <sjs2>",
     "steps": 25,
     "seed": 137,
     "nums": 3,
@@ -64,7 +64,7 @@ prompt_conf_dict = {
         "a weird painting in the style of {}",
         "a large painting in the style of {}",
     ],
-    'add_token': "<sks2>",
+    'add_token': "<sjs2>",
     'random_tags': 0.,
     'use_default': True
 }
