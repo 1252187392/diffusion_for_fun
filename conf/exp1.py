@@ -1,6 +1,6 @@
 
 logging_dir = 'logs'
-epochs = 10  # total epochs
+epochs = 20  # total epochs
 start_epoch = 0  # start epoch , little than epochs
 batch_size = 6  # batch_size
 load_weights = None # dir of load weights
