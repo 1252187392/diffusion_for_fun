@@ -118,6 +118,10 @@ total_batch_size = conf.batch_size * accelerator.num_processes * conf.accelerato
 print(f'total_batch_size:{total_batch_size}')
 
 def save(epoch):
+    if not os.path.exists(conf.save_weights):
+        os.mkdir(conf.save_weights)
+    if not os.path.exists(f"{conf.save_weights}/{epoch}"):
+        os.mkdir(f"{conf.save_weights}/{epoch}")
     save_lora_weight(
         unet,
         os.path.join(f"{conf.save_weights}/{epoch}", "lora_unet.pt"),
