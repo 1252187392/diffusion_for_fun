@@ -73,7 +73,7 @@ params_to_optimize = (
     [
         {
             "params": itertools.chain(*unet_lora_params),
-            "lr": 5e-5,
+            "lr": 5e-4,
         },
         {
             "params": itertools.chain(*text_encoder_lora_params),
