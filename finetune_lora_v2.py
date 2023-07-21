@@ -73,7 +73,7 @@ params_to_optimize = (
     [
         {
             "params": itertools.chain(*unet_lora_params),
-            "lr": 5e-4,
+            "lr": 1e-4,
         },
         {
             "params": itertools.chain(*text_encoder_lora_params),
@@ -84,7 +84,6 @@ params_to_optimize = (
 
 #sys.exit()
 optimizer = torch.optim.AdamW(
-    #lora_layers.parameters(),
     params_to_optimize,
     lr=conf.optimizer_conf['learning_rate'],
     betas=(conf.optimizer_conf['adam_beta1'], conf.optimizer_conf['adam_beta2']),
