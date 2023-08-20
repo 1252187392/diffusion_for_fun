@@ -43,7 +43,8 @@ def generate_image(pipeline, prompt, steps, seed, nums, device, save_name=None,
     images = []
     for _ in range(nums):
         image = pipeline(prompt, negative_prompt=negative_prompt, num_inference_steps=steps,
-                         generator=generator, cross_attention_kwargs={"scale": scale},
+                         generator=generator,
+                         #cross_attention_kwargs={"scale": scale},
                          guidance_scale=guidance_scale,
                          height=size[1], width=size[0]).images[0]
         if save_name is not None:
@@ -58,7 +59,8 @@ def image_to_image(pipeline, prompt, steps, seed, nums, device, save_name=None,
     images = []
     for _ in range(nums):
         image = pipeline(prompt, negative_prompt=negative_prompt, num_inference_steps=steps,
-                         generator=generator, cross_attention_kwargs={"scale": scale},
+                         generator=generator,
+                         #cross_attention_kwargs={"scale": scale},
                          strength=strength, guidance_scale=guidance_scale,
                          image=init_image).images[0]
         if save_name is not None:
