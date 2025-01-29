@@ -5,7 +5,7 @@ support windows
 ## requirements
 * pytorch
 ```buildoutcfg
-pip install -i requirements.txt
+pip install -r requirements.txt
 ```
 
 ## run
