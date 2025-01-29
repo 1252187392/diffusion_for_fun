@@ -4,17 +4,18 @@ import sys
 import math
 import importlib
 import torch
-#torch.distributed.init_process_group("gloo")
+torch.distributed.init_process_group("gloo")
 import torch.utils.checkpoint
 
 from diffusers import DiffusionPipeline
 from diffusers.loaders import AttnProcsLayers
 
 from models.model_utils import init_models, init_accelerator, set_unet_lora
-from dataloader.dataloader import get_dataloader
-from models.train_step import train_step,generate_image
+from dataloader.dataloader import get_dataloader, get_bucket_dataloader
+from models.train_step import train_step, generate_image
 from tqdm import tqdm
 import itertools
+'''
 from lora_diffusion import (
     inject_trainable_lora,
     save_lora_weight,
@@ -22,6 +23,8 @@ from lora_diffusion import (
     #monkeypatch_lora,
     tune_lora_scale,
 )
+'''
+from lora import inject_trainable_lora,save_lora_weight
 
 conf = sys.argv[1]
 print('using conf:', conf)
@@ -59,6 +62,7 @@ else:
     unet_loras, text_loras = None, None
 
 #unet.enable_xformers_memory_efficient_attention()
+
 
 unet_lora_params, train_names = inject_trainable_lora(unet, loras=unet_loras, r=4)
 
@@ -104,7 +108,10 @@ pipeline = DiffusionPipeline.from_pretrained(
 
 pipeline = pipeline.to(accelerator.device)
 
-data_loader = get_dataloader(conf.data_dirs, tokenizer, conf.prompt_conf_dict, conf.batch_size)
+#data_loader = get_dataloader(conf.data_dirs, tokenizer, conf.prompt_conf_dict, conf.batch_size)
+print('batch_size:', conf.batch_size)
+data_loader = get_bucket_dataloader(conf.data_dirs, tokenizer, conf.prompt_conf_dict, conf.batch_size)
+
 
 # Prepare everything with our `accelerator`.
 lora_layers, text_encoder, optimizer, data_loader = accelerator.prepare(
@@ -136,7 +143,13 @@ for epoch in range(conf.start_epoch+1, conf.epochs):
     #unet.train()
     train_loss = 0
     for step, batch_data in tqdm(enumerate(data_loader)):
+        if step >= len(data_loader):
+            break
         #train_step(batch_data, vae, text_encoder, unet, noise_scheduler, weight_dtype)
+        if len(batch_data[0].shape) == 5:
+            batch_data = (batch_data[0][0], batch_data[1][0])
+        #if accelerator.is_main_process:
+        #    print(batch_data[0].shape)
         with accelerator.accumulate(unet):
             loss = train_step(batch_data, vae, text_encoder, unet, noise_scheduler, weight_dtype)
 
@@ -155,7 +168,8 @@ for epoch in range(conf.start_epoch+1, conf.epochs):
     if epoch % conf.callback_frequency == 0:
         accelerator.wait_for_everyone()
         #unet.save_attn_procs(f"{conf.save_weights}/{epoch}")
-        save(epoch)
+        if accelerator.is_main_process:
+            save(epoch)
 
 accelerator.wait_for_everyone()
 if accelerator.is_main_process:
