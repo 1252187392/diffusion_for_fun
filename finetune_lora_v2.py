@@ -64,13 +64,13 @@ else:
 #unet.enable_xformers_memory_efficient_attention()
 
 
-unet_lora_params, train_names = inject_trainable_lora(unet, loras=unet_loras, r=4)
+unet_lora_params, train_names = inject_trainable_lora(unet, loras=unet_loras, r=conf.rank)
 
 # set text encoder
 text_encoder_lora_params, text_encoder_names = inject_trainable_lora(
             text_encoder, target_replace_module=["CLIPAttention"],
             loras=text_loras, #pt file
-            r=4,
+            r=conf.rank,
 )
 
 params_to_optimize = (
@@ -137,19 +137,25 @@ def save(epoch):
         os.path.join(f"{conf.save_weights}/{epoch}", "lora_text_encoder.pt"),
         target_replace_module=["CLIPAttention"],
     )
+    generate_image(pipeline, conf.generation_conf["prompt"], conf.generation_conf["steps"],
+                   conf.generation_conf["seed"],
+                   conf.generation_conf["nums"],
+                   accelerator.device,
+                   f'{conf.generation_conf["save_dir"]}{epoch}')
 
 
+total_step = 0
 for epoch in range(conf.start_epoch+1, conf.epochs):
     #unet.train()
     train_loss = 0
     for step, batch_data in tqdm(enumerate(data_loader)):
         if step >= len(data_loader):
             break
+        total_step += 1
         #train_step(batch_data, vae, text_encoder, unet, noise_scheduler, weight_dtype)
         if len(batch_data[0].shape) == 5:
             batch_data = (batch_data[0][0], batch_data[1][0])
-        #if accelerator.is_main_process:
-        #    print(batch_data[0].shape)
+
         with accelerator.accumulate(unet):
             loss = train_step(batch_data, vae, text_encoder, unet, noise_scheduler, weight_dtype)
 
@@ -164,10 +170,11 @@ for epoch in range(conf.start_epoch+1, conf.epochs):
             optimizer.step()
             optimizer.zero_grad()
         if accelerator.is_main_process and step and step % 30 ==0:
-            print(f'epoch:{epoch}, step:{step}, loss:{train_loss/step}')
+            print(f'epoch:{epoch}, step:{total_step}, loss:{train_loss/step}')
+        if total_step >= conf.max_step:
+            break
     if epoch % conf.callback_frequency == 0:
         accelerator.wait_for_everyone()
-        #unet.save_attn_procs(f"{conf.save_weights}/{epoch}")
         if accelerator.is_main_process:
             save(epoch)
 
