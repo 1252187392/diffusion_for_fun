@@ -8,22 +8,13 @@ torch.distributed.init_process_group("gloo")
 import torch.utils.checkpoint
 
 from diffusers import DiffusionPipeline
-from diffusers.loaders import AttnProcsLayers
 
 from models.model_utils import init_models, init_accelerator, set_unet_lora
 from dataloader.dataloader import get_dataloader, get_bucket_dataloader
 from models.train_step import train_step, generate_image
 from tqdm import tqdm
 import itertools
-'''
-from lora_diffusion import (
-    inject_trainable_lora,
-    save_lora_weight,
-    extract_lora_ups_down,
-    #monkeypatch_lora,
-    tune_lora_scale,
-)
-'''
+
 from lora import inject_trainable_lora,save_lora_weight
 
 conf = sys.argv[1]
